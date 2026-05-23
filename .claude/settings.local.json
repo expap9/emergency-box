@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(npx tsc *)",
+      "Bash(Start-Sleep -Seconds 3)",
+      "Bash(Invoke-WebRequest -Uri http://localhost:5173 -UseBasicParsing -TimeoutSec 5)",
+      "Bash(Select-Object -ExpandProperty StatusCode)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('deps:', list\\(d.get\\('dependencies',{}\\).keys\\(\\)\\)\\)\")",
+      "Bash(python -c \"import sys; lines=[l.strip\\(\\) for l in sys.stdin]; print\\('express-rate-limit installed:', 'express-rate-limit' in lines\\)\")",
+      "Bash(npx prisma *)",
+      "Bash(pkill -f \"vite\")",
+      "Bash(curl -s http://localhost:5174)"
+    ]
+  }
+}

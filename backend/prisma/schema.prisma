@@ -1,0 +1,266 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== Users ====================
+model User {
+  id          String   @id @default(cuid())
+  username    String   @unique
+  email       String   @unique
+  password    String
+  name        String
+  role        UserRole @default(STAFF)
+  telegramId  String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  preparedBatches  BoxBatch[]      @relation("PreparedBy")
+  distributedItems Distribution[] @relation("DistributedBy")
+  returnedItems    Distribution[] @relation("ReturnedBy")
+  notifRecipients  NotificationRecipient[]
+}
+
+enum UserRole {
+  ADMIN
+  PHARMACIST
+  STAFF
+  VIEWER
+}
+
+// ==================== Boxes ====================
+model Box {
+  id        String    @id @default(cuid())
+  boxNumber String    @unique
+  qrCode    String    @unique
+  status    BoxStatus @default(AVAILABLE)
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  batches BoxBatch[]
+}
+
+enum BoxStatus {
+  AVAILABLE
+  DISTRIBUTED
+  EXPIRED
+  MAINTENANCE
+  RETIRED
+}
+
+// ==================== Box Batches (ล็อตการจัดยา / ฉลาก QR) ====================
+model BoxBatch {
+  id               String      @id @default(cuid())
+  batchNumber      String      @unique
+  qrCode           String?     @unique    // UUID ที่ฝังใน QR sticker — null สำหรับ batch เก่า
+  boxId            String?               // optional: ผูกกับกล่องฟิสิคัล (bulk-issued batches ไม่มี)
+  box              Box?        @relation(fields: [boxId], references: [id])
+  preparedDate     DateTime    @default(now())
+  expiryDate       DateTime
+  preparedById     String
+  preparedBy       User        @relation("PreparedBy", fields: [preparedById], references: [id])
+  stickerPrinted   Boolean     @default(false)
+  stickerPrintedAt DateTime?
+  status           BatchStatus @default(ACTIVE)
+  notes            String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  medications   BatchMedication[]
+  distributions Distribution[]
+  notifications Notification[]
+}
+
+enum BatchStatus {
+  ACTIVE
+  DISTRIBUTED
+  RETURNED
+  EXPIRED
+  RECALLED
+}
+
+// ==================== Medications (ยา 11 รายการ) ====================
+model Medication {
+  id          String  @id @default(cuid())
+  name        String
+  genericName String
+  strength    String?
+  unit        String
+  standardQty Int
+  description String?
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+
+  batchMedications BatchMedication[]
+}
+
+model BatchMedication {
+  id           String     @id @default(cuid())
+  batchId      String
+  batch        BoxBatch   @relation(fields: [batchId], references: [id])
+  medicationId String
+  medication   Medication @relation(fields: [medicationId], references: [id])
+  quantity     Int
+  lotNumber    String?
+  expiryDate   DateTime?
+
+  @@unique([batchId, medicationId])
+}
+
+// ==================== Wards (หอผู้ป่วย) ====================
+model Ward {
+  id           String  @id @default(cuid())
+  name         String
+  code         String  @unique
+  floor        String?
+  building     String?
+  department   String?
+  contactName  String?
+  contactPhone String?
+  isActive     Boolean @default(true)
+  createdAt    DateTime @default(now())
+
+  distributions Distribution[]
+}
+
+// ==================== Distributions (การจ่าย/รับคืน/ยืม) ====================
+model Distribution {
+  id               String           @id @default(cuid())
+  batchId          String
+  batch            BoxBatch         @relation(fields: [batchId], references: [id])
+  type             DistributionType @default(WARD)
+  // Ward distribution
+  wardId           String?
+  ward             Ward?            @relation(fields: [wardId], references: [id])
+  // Loan (ยืมกล่อง)
+  borrowerName     String?
+  borrowerRole     String?
+  borrowerDept     String?
+  borrowerContact  String?
+  loanPurpose      String?
+  // Common
+  distributedAt        DateTime         @default(now())
+  distributedById      String
+  distributedBy        User             @relation("DistributedBy", fields: [distributedById], references: [id])
+  performedByName      String?          // ชื่อผู้ดำเนินการ (scan without login)
+  performedByRole      String?          // ตำแหน่ง/บทบาท
+  expectedReturnAt     DateTime?
+  returnedAt           DateTime?
+  returnedById         String?
+  returnedBy           User?            @relation("ReturnedBy", fields: [returnedById], references: [id])
+  performedByNameReturn String?         // ชื่อผู้รับคืน (scan without login)
+  condition            BoxCondition?
+  conditionNotes       String?
+  status               DistributionStatus @default(ACTIVE)
+  scannedViaQr         Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+}
+
+enum DistributionType {
+  WARD   // จ่ายไปหอผู้ป่วยอย่างเป็นทางการ
+  LOAN   // ยืมชั่วคราว / ให้บุคคลนำไป
+}
+
+enum DistributionStatus {
+  ACTIVE
+  RETURNED
+  OVERDUE
+}
+
+// ==================== Security: Login Attempts ====================
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  username  String
+  ip        String
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([username, createdAt])
+  @@index([ip, createdAt])
+}
+
+// ==================== Audit Log ====================
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  detail    String?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([entity, entityId])
+}
+
+enum BoxCondition {
+  GOOD
+  FAIR
+  DAMAGED
+  INCOMPLETE
+}
+
+// ==================== Notifications ====================
+model Notification {
+  id        String             @id @default(cuid())
+  batchId   String
+  batch     BoxBatch           @relation(fields: [batchId], references: [id])
+  type      NotificationType
+  message   String
+  sentAt    DateTime           @default(now())
+  status    NotificationStatus @default(PENDING)
+
+  recipients NotificationRecipient[]
+}
+
+enum NotificationType {
+  EXPIRY_30_DAYS
+  EXPIRY_7_DAYS
+  EXPIRY_1_DAY
+  EXPIRED
+  RECALL
+  RETURN_REMINDER
+  CUSTOM
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  PARTIAL
+}
+
+model NotificationRecipient {
+  id             String              @id @default(cuid())
+  notificationId String
+  notification   Notification        @relation(fields: [notificationId], references: [id])
+  userId         String
+  user           User                @relation(fields: [userId], references: [id])
+  channel        NotificationChannel
+  status         String              @default("PENDING")
+  sentAt         DateTime?
+  errorMessage   String?
+}
+
+enum NotificationChannel {
+  EMAIL
+  TELEGRAM
+}
+
+// ==================== System Settings ====================
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  label     String?
+  updatedAt DateTime @updatedAt
+}
