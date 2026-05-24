@@ -5,9 +5,11 @@ import { useReactToPrint } from 'react-to-print';
 import { format, differenceInDays } from 'date-fns';
 import { th } from 'date-fns/locale';
 import QRCodeSVG from 'react-qr-code';
-import { Printer, ChevronLeft, Check, AlertTriangle, MapPin, RotateCcw, RefreshCw } from 'lucide-react';
+import { Printer, ChevronLeft, Check, AlertTriangle, MapPin, RotateCcw, RefreshCw, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getBatch, printSticker, distributeBox, getWards, refillBatch } from '../lib/api';
+import { getBatch, printSticker, distributeBox, getWards, refillBatch, recallBatch } from '../lib/api';
+
+const RECYCLE_DAYS = 30; // must match backend scan.ts
 
 export default function StickerPage() {
   const { id } = useParams<{ id: string }>();
@@ -17,6 +19,8 @@ export default function StickerPage() {
   const [selectedWard, setSelectedWard] = useState('');
   const [refillExpiry, setRefillExpiry] = useState('');
   const [refillNotes, setRefillNotes] = useState('');
+  const [showRecallModal, setShowRecallModal] = useState(false);
+  const [recallReason, setRecallReason] = useState('');
 
   const { data: batch, refetch } = useQuery({
     queryKey: ['batch', id],
@@ -53,6 +57,25 @@ export default function StickerPage() {
       toast.error(err.response?.data?.error ?? 'ไม่สามารถลงยาใหม่ได้');
     },
   });
+
+  const recallMut = useMutation({
+    mutationFn: () => recallBatch(id!, recallReason.trim()),
+    onSuccess: () => {
+      toast.success('ยกเลิก QR Code เรียบร้อยแล้ว');
+      qc.invalidateQueries({ queryKey: ['batch', id] });
+      qc.invalidateQueries({ queryKey: ['batches'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      setShowRecallModal(false);
+      setRecallReason('');
+      refetch();
+    },
+    onError: () => toast.error('ไม่สามารถยกเลิก QR Code ได้'),
+  });
+
+  // Days remaining for the new refill expiry date the user typed
+  const refillDaysRemaining = refillExpiry
+    ? differenceInDays(new Date(refillExpiry), new Date())
+    : null;
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
@@ -258,6 +281,19 @@ export default function StickerPage() {
                     min={new Date().toISOString().slice(0, 10)}
                     onChange={e => setRefillExpiry(e.target.value)}
                   />
+                  {/* Warn if chosen expiry is within 30 days — cannot be distributed */}
+                  {refillDaysRemaining !== null && refillDaysRemaining <= RECYCLE_DAYS && (
+                    <div className="mt-2 flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-2.5">
+                      <AlertTriangle size={15} className="text-red-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-red-700">
+                        วันหมดอายุที่เลือกเหลือเพียง <strong>{refillDaysRemaining} วัน</strong> — ต้องเกิน {RECYCLE_DAYS} วัน
+                        จึงจะจ่ายออกได้ กรุณาเลือกวันที่นานกว่านี้
+                      </p>
+                    </div>
+                  )}
+                  {refillDaysRemaining !== null && refillDaysRemaining > RECYCLE_DAYS && (
+                    <p className="text-xs text-green-600 mt-1">✓ เหลือ {refillDaysRemaining} วัน — จ่ายออกได้</p>
+                  )}
                 </div>
                 <div>
                   <label className="label">หมายเหตุ (ถ้ามี)</label>
@@ -271,7 +307,7 @@ export default function StickerPage() {
                 </div>
                 <button
                   className="btn-success w-full justify-center"
-                  disabled={!refillExpiry || refillMut.isPending}
+                  disabled={!refillExpiry || (refillDaysRemaining !== null && refillDaysRemaining <= RECYCLE_DAYS) || refillMut.isPending}
                   onClick={() => refillMut.mutate()}
                 >
                   <RefreshCw size={16} />
@@ -312,11 +348,26 @@ export default function StickerPage() {
           {/* ── RECALLED / EXPIRED ── */}
           {(batch.status === 'RECALLED' || batch.status === 'EXPIRED') && (
             <div className="flex flex-col items-center justify-center py-8 text-center space-y-2">
-              <AlertTriangle size={32} className="text-red-500" />
+              <XCircle size={32} className="text-red-500" />
               <p className="font-semibold text-red-700">
-                {batch.status === 'RECALLED' ? 'กล่องถูกระงับการใช้งาน' : 'กล่องหมดอายุแล้ว'}
+                {batch.status === 'RECALLED' ? 'QR Code ถูกยกเลิกแล้ว' : 'กล่องหมดอายุแล้ว'}
               </p>
-              <p className="text-sm text-gray-500">ไม่สามารถจ่ายกล่องนี้ได้</p>
+              {batch.notes && (
+                <p className="text-sm text-gray-500 bg-gray-50 rounded-lg px-3 py-2">เหตุผล: {batch.notes}</p>
+              )}
+            </div>
+          )}
+
+          {/* ── Recall button (shown for all active statuses) ── */}
+          {batch.status !== 'RECALLED' && batch.status !== 'EXPIRED' && (
+            <div className="border-t pt-4 mt-2">
+              <button
+                onClick={() => setShowRecallModal(true)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+              >
+                <XCircle size={15} />
+                ยกเลิก QR Code นี้
+              </button>
             </div>
           )}
 
@@ -343,6 +394,59 @@ export default function StickerPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Recall Modal ── */}
+      {showRecallModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md">
+            <div className="p-6 border-b">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <XCircle size={20} className="text-red-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold">ยกเลิก QR Code</h2>
+                  <p className="text-sm text-gray-500">{batch.batchNumber}</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-sm text-red-700">
+                  เมื่อยกเลิกแล้ว QR Code นี้จะ<strong>ใช้งานไม่ได้อีก</strong> — ต้องออก QR Code ใหม่แทน
+                </p>
+              </div>
+              <div>
+                <label className="label">เหตุผลในการยกเลิก <span className="text-red-500">*</span></label>
+                <textarea
+                  className="input"
+                  rows={3}
+                  placeholder="เช่น ยาหมดอายุก่อนกำหนด, สูญหาย, ยาไม่ครบ..."
+                  value={recallReason}
+                  onChange={e => setRecallReason(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t flex gap-3 justify-end">
+              <button
+                className="btn-secondary"
+                onClick={() => { setShowRecallModal(false); setRecallReason(''); }}
+              >
+                ยกเลิก
+              </button>
+              <button
+                className="btn-primary bg-red-600 hover:bg-red-700 justify-center"
+                disabled={!recallReason.trim() || recallMut.isPending}
+                onClick={() => recallMut.mutate()}
+              >
+                <XCircle size={16} />
+                {recallMut.isPending ? 'กำลังบันทึก...' : 'ยืนยันยกเลิก QR Code'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
