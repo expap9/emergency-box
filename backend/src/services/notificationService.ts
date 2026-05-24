@@ -54,7 +54,10 @@ export async function sendExpiryNotifications() {
       const expiryStr = format(batch.expiryDate, 'd MMMM yyyy', { locale: th });
       const locationStr = ward ? `หอผู้ป่วย ${ward.name}` : 'ห้องยา';
       const boxLabel = batch.box?.boxNumber ?? batch.batchNumber;
-      const message = `⚠️ กล่องยา Emergency Box ${boxLabel} (${batch.batchNumber}) จะหมดอายุใน ${days} วัน (${expiryStr}) ปัจจุบันอยู่ที่ ${locationStr}`;
+      const appUrl = process.env.APP_URL || 'http://localhost:5173';
+      const detailLink = `${appUrl}/batches/${batch.id}/sticker`;
+      const phoneStr = ward?.contactPhone ? `\n📞 เบอร์ติดต่อ: ${ward.contactPhone}` : '';
+      const message = `⚠️ กล่องยา Emergency Box ${boxLabel} (${batch.batchNumber}) จะหมดอายุใน ${days} วัน (${expiryStr})\n📍 ปัจจุบันอยู่ที่: ${locationStr}${phoneStr}\n🔗 ดูรายละเอียด: ${detailLink}`;
 
       const users = await prisma.user.findMany({
         where: { isActive: true, role: { in: ['ADMIN', 'PHARMACIST'] } },
@@ -87,7 +90,12 @@ export async function sendExpiryNotifications() {
               html: buildEmailHtml(message, batch, ward),
             });
           } else if (recipient.channel === 'TELEGRAM' && recipient.user.telegramId && telegramBot) {
-            await telegramBot.sendMessage(recipient.user.telegramId, message, { parse_mode: 'HTML' });
+            // Build Telegram message with clickable link using HTML tags
+            const tgMsg = message.replace(
+              /🔗 ดูรายละเอียด: (https?:\/\/\S+)/,
+              '🔗 <a href="$1">ดูรายละเอียดในระบบ</a>'
+            );
+            await telegramBot.sendMessage(recipient.user.telegramId, tgMsg, { parse_mode: 'HTML' });
           }
           await prisma.notificationRecipient.update({
             where: { id: recipient.id },
@@ -120,15 +128,20 @@ export async function sendExpiryNotifications() {
   });
 }
 
-function buildEmailHtml(message: string, batch: { box?: { boxNumber: string } | null; batchNumber: string; expiryDate: Date }, ward: { name: string } | null | undefined) {
+function buildEmailHtml(
+  message: string,
+  batch: { id: string; box?: { boxNumber: string } | null; batchNumber: string; expiryDate: Date },
+  ward: { name: string; contactPhone?: string | null } | null | undefined
+) {
+  const appUrl = process.env.APP_URL || 'http://localhost:5173';
+  const detailLink = `${appUrl}/batches/${batch.id}/sticker`;
   return `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
       <div style="background: #dc2626; color: white; padding: 16px; border-radius: 8px 8px 0 0;">
         <h2 style="margin: 0;">⚠️ แจ้งเตือน Emergency Box ใกล้หมดอายุ</h2>
       </div>
       <div style="background: #fff; border: 1px solid #e5e7eb; padding: 20px; border-radius: 0 0 8px 8px;">
-        <p style="font-size: 16px;">${message}</p>
-        <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
+        <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
           <tr style="background: #f3f4f6;">
             <td style="padding: 8px; font-weight: bold;">กล่องหมายเลข</td>
             <td style="padding: 8px;">${batch.box?.boxNumber ?? batch.batchNumber}</td>
@@ -139,13 +152,23 @@ function buildEmailHtml(message: string, batch: { box?: { boxNumber: string } | 
           </tr>
           <tr style="background: #f3f4f6;">
             <td style="padding: 8px; font-weight: bold;">วันหมดอายุ</td>
-            <td style="padding: 8px; color: #dc2626;">${format(batch.expiryDate, 'dd/MM/yyyy')}</td>
+            <td style="padding: 8px; color: #dc2626; font-weight: bold;">${format(batch.expiryDate, 'dd/MM/yyyy')}</td>
           </tr>
           <tr>
             <td style="padding: 8px; font-weight: bold;">ตำแหน่ง</td>
             <td style="padding: 8px;">${ward ? `หอผู้ป่วย ${ward.name}` : 'ห้องยา'}</td>
           </tr>
+          ${ward?.contactPhone ? `
+          <tr style="background: #f3f4f6;">
+            <td style="padding: 8px; font-weight: bold;">เบอร์ติดต่อ</td>
+            <td style="padding: 8px;">📞 ${ward.contactPhone}</td>
+          </tr>` : ''}
         </table>
+        <div style="text-align: center; margin-top: 20px;">
+          <a href="${detailLink}" style="background: #dc2626; color: white; padding: 10px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block;">
+            🔗 ดูรายละเอียดในระบบ
+          </a>
+        </div>
         <p style="color: #6b7280; font-size: 12px; margin-top: 20px;">ระบบติดตาม Emergency Box - โรงพยาบาล</p>
       </div>
     </div>
