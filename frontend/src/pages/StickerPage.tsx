@@ -22,9 +22,10 @@ export default function StickerPage() {
   const [showRecallModal, setShowRecallModal] = useState(false);
   const [recallReason, setRecallReason] = useState('');
 
-  const { data: batch, refetch } = useQuery({
+  const { data: batch, refetch, isLoading: batchLoading, isError: batchError } = useQuery({
     queryKey: ['batch', id],
     queryFn: () => getBatch(id!),
+    retry: 1,
   });
   const { data: wards = [] } = useQuery({ queryKey: ['wards'], queryFn: getWards });
 
@@ -83,9 +84,26 @@ export default function StickerPage() {
     documentTitle: `Sticker-${batch?.batchNumber}`,
   });
 
-  if (!batch) return (
+  if (batchLoading) return (
     <div className="flex items-center justify-center h-64">
       <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600" />
+    </div>
+  );
+
+  if (batchError || !batch) return (
+    <div className="max-w-4xl mx-auto space-y-4">
+      <button onClick={() => navigate(-1)} className="btn-secondary p-2">
+        <ChevronLeft size={18} />
+      </button>
+      <div className="card text-center py-16 space-y-3">
+        <AlertTriangle size={40} className="text-red-400 mx-auto" />
+        <p className="text-gray-700 font-medium">ไม่พบข้อมูล Batch นี้</p>
+        <p className="text-sm text-gray-400">อาจถูกลบ ยกเลิก หรือลิงก์ไม่ถูกต้อง</p>
+        <div className="flex gap-3 justify-center">
+          <button onClick={() => refetch()} className="btn-secondary">ลองใหม่</button>
+          <button onClick={() => navigate('/batches')} className="btn-primary">ไปหน้า Batches</button>
+        </div>
+      </div>
     </div>
   );
 

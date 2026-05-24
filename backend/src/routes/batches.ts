@@ -12,9 +12,10 @@ const appUrl = () => process.env.APP_URL || 'http://localhost';
 
 // List batches with filters
 batchRouter.get('/', async (req, res: Response) => {
-  const { status, expiringSoon } = req.query;
+  const { status, expiringSoon, boxId } = req.query;
   const where: Record<string, unknown> = {};
   if (status) where.status = status;
+  if (boxId) where.boxId = String(boxId);
   if (expiringSoon === 'true') {
     where.expiryDate = { lte: addDays(new Date(), 30), gte: new Date() };
   }

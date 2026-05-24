@@ -274,11 +274,26 @@ scanRouter.post('/:qrCode/request-stock', async (req: Request, res: Response) =>
   res.json({ success: true, message: `แจ้งห้องยาเรียบร้อย — ห้องยาจะดำเนินการโดยเร็ว` });
 });
 
-// helper — system user for scan actions (cached)
+// helper — system user for scan actions (cached with 1-hour TTL)
 let _systemUserId: string | null = null;
+let _systemUserIdFetchedAt = 0;
+const SYSTEM_USER_CACHE_MS = 60 * 60 * 1000;
+
 async function getSystemUserId(): Promise<string> {
-  if (_systemUserId) return _systemUserId;
-  const sys = await prisma.user.findFirst({ where: { username: 'admin' } });
-  _systemUserId = sys?.id ?? 'system';
+  const now = Date.now();
+  if (_systemUserId && (now - _systemUserIdFetchedAt) < SYSTEM_USER_CACHE_MS) {
+    return _systemUserId;
+  }
+  // Prefer ADMIN, fall back to any active user — never use a fake 'system' string
+  const sys = await prisma.user.findFirst({
+    where: { isActive: true, role: 'ADMIN' },
+    orderBy: { createdAt: 'asc' },
+  }) ?? await prisma.user.findFirst({
+    where: { isActive: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  if (!sys) throw new Error('ไม่พบผู้ใช้ในระบบ — กรุณาสร้างบัญชี admin ก่อนใช้งาน QR scan');
+  _systemUserId = sys.id;
+  _systemUserIdFetchedAt = now;
   return _systemUserId;
 }

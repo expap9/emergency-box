@@ -115,7 +115,7 @@ export default function BoxesPage() {
                     </p>
                   )}
                   <div className="flex gap-2 mt-3">
-                    <Link to={`/batches?boxId=${box.id}`} className="btn-secondary text-xs py-1 px-2 flex-1 justify-center">
+                    <Link to={`/batches?boxId=${box.id}&boxNumber=${encodeURIComponent(box.boxNumber)}`} className="btn-secondary text-xs py-1 px-2 flex-1 justify-center">
                       ประวัติ
                     </Link>
                     <Link to={`/boxes/${box.id}/qrcode`} className="btn-secondary text-xs py-1 px-2">

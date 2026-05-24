@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { format, differenceInDays } from 'date-fns';
 import { th } from 'date-fns/locale';
-import { ClipboardList, Printer, Plus, AlertTriangle } from 'lucide-react';
+import { Printer, Plus, AlertTriangle, X } from 'lucide-react';
 import { getBatches } from '../lib/api';
 
 const statusMap: Record<string, { label: string; cls: string }> = {
@@ -15,12 +15,20 @@ const statusMap: Record<string, { label: string; cls: string }> = {
 };
 
 export default function BatchesPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const boxIdFilter = searchParams.get('boxId');
+  const boxNumberFilter = searchParams.get('boxNumber'); // display label
+
   const [filter, setFilter] = useState('');
   const [expiringSoon, setExpiringSoon] = useState(false);
 
   const { data: batches = [], isLoading } = useQuery({
-    queryKey: ['batches', filter, expiringSoon],
-    queryFn: () => getBatches({ ...(filter && { status: filter }), ...(expiringSoon && { expiringSoon: 'true' }) }),
+    queryKey: ['batches', filter, expiringSoon, boxIdFilter],
+    queryFn: () => getBatches({
+      ...(filter && { status: filter }),
+      ...(expiringSoon && { expiringSoon: 'true' }),
+      ...(boxIdFilter && { boxId: boxIdFilter }),
+    }),
   });
 
   if (isLoading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600" /></div>;
@@ -36,6 +44,22 @@ export default function BatchesPage() {
           <Plus size={18} /> จัดยาใหม่
         </Link>
       </div>
+
+      {/* Box filter banner */}
+      {boxIdFilter && (
+        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
+          <span className="text-sm text-blue-700">
+            📦 กรองประวัติกล่อง: <strong>{boxNumberFilter ?? boxIdFilter}</strong>
+          </span>
+          <button
+            onClick={() => setSearchParams({})}
+            className="ml-auto text-blue-500 hover:text-blue-700"
+            title="ล้าง filter"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-2 flex-wrap items-center">
         {['', 'ACTIVE', 'DISTRIBUTED', 'RETURNED', 'EXPIRED'].map(s => (
