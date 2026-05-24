@@ -50,6 +50,17 @@ async function findBatchByQr(qrCode: string) {
   });
 }
 
+// GET /api/scan/_wards — ward list for dropdown (public)
+// ⚠️ Must be defined BEFORE /:qrCode to avoid Express capturing "_wards" as a parameter
+scanRouter.get('/_wards', async (_req: Request, res: Response) => {
+  const wards = await prisma.ward.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true, code: true, floor: true, building: true },
+    orderBy: { name: 'asc' },
+  });
+  res.json(wards);
+});
+
 // GET /api/scan/:qrCode — box info for the scan page (public)
 scanRouter.get('/:qrCode', async (req: Request, res: Response) => {
   const batch = await findBatchByQr(String(req.params.qrCode));
@@ -89,16 +100,6 @@ scanRouter.get('/:qrCode', async (req: Request, res: Response) => {
         }
       : null,
   });
-});
-
-// GET /api/scan/_wards — ward list for dropdown (public)
-scanRouter.get('/_wards', async (_req: Request, res: Response) => {
-  const wards = await prisma.ward.findMany({
-    where: { isActive: true },
-    select: { id: true, name: true, code: true, floor: true, building: true },
-    orderBy: { name: 'asc' },
-  });
-  res.json(wards);
 });
 
 // POST /api/scan/:qrCode/distribute — จ่ายกล่องไปหอผู้ป่วย
