@@ -200,3 +200,48 @@ batchRouter.post('/:id/recall', requireRole('ADMIN', 'PHARMACIST'), async (req, 
   });
   res.json(batch);
 });
+
+// Refill batch — ลงยาใหม่ (same QR code, new expiry, counted as a new cycle)
+batchRouter.post('/:id/refill', requireRole('ADMIN', 'PHARMACIST'), async (req: AuthRequest, res: Response) => {
+  const batchId = String(req.params.id);
+  const { expiryDate, notes } = req.body;
+
+  if (!expiryDate) return res.status(400).json({ error: 'กรุณาระบุวันหมดอายุใหม่' });
+  const expiry = new Date(expiryDate);
+  if (isNaN(expiry.getTime()) || expiry <= new Date()) {
+    return res.status(400).json({ error: 'วันหมดอายุต้องเป็นวันในอนาคต' });
+  }
+
+  const existing = await prisma.boxBatch.findUnique({ where: { id: batchId } });
+  if (!existing) return res.status(404).json({ error: 'Batch not found' });
+  if (existing.status !== 'RETURNED') {
+    return res.status(400).json({ error: 'สามารถลงยาใหม่ได้เฉพาะกล่องที่รับคืนแล้วเท่านั้น' });
+  }
+
+  const batch = await prisma.boxBatch.update({
+    where: { id: batchId },
+    data: {
+      status: 'ACTIVE',
+      expiryDate: expiry,
+      preparedDate: new Date(),
+      preparedById: req.user!.id,
+      stickerPrinted: false,
+      stickerPrintedAt: null,
+      ...(notes !== undefined && { notes: notes || null }),
+    },
+    include: {
+      box: true,
+      medications: { include: { medication: true }, orderBy: { medication: { sortOrder: 'asc' } } },
+      preparedBy: { select: { name: true } },
+      distributions: {
+        orderBy: { distributedAt: 'desc' },
+        include: { ward: true, distributedBy: { select: { name: true } }, returnedBy: { select: { name: true } } },
+      },
+    },
+  });
+
+  const qrUrl = batch.qrCode ? `${appUrl()}/scan/${batch.qrCode}` : null;
+  const qrCodeDataUrl = qrUrl ? await QRCode.toDataURL(qrUrl, { width: 200, margin: 1 }) : null;
+
+  res.json({ ...batch, qrCodeDataUrl });
+});

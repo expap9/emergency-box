@@ -50,6 +50,8 @@ export const createBatch = (data: unknown) => api.post('/batches', data).then(r 
 export const printSticker = (id: string) => api.post(`/batches/${id}/print-sticker`).then(r => r.data);
 export const recallBatch = (id: string, reason: string) =>
   api.post(`/batches/${id}/recall`, { reason }).then(r => r.data);
+export const refillBatch = (id: string, data: { expiryDate: string; notes?: string }) =>
+  api.post(`/batches/${id}/refill`, data).then(r => r.data);
 export const bulkIssueQr = (data: { expiryDate: string; quantity: number; notes?: string }) =>
   api.post('/batches/bulk-issue', data).then(r => r.data);
 

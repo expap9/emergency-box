@@ -19,9 +19,12 @@ reportRouter.get('/dashboard', async (_req, res: Response) => {
     recentDistributions,
     wardSummary,
   ] = await Promise.all([
-    prisma.box.count(),
-    prisma.box.count({ where: { status: 'AVAILABLE' } }),
-    prisma.box.count({ where: { status: 'DISTRIBUTED' } }),
+    // Count BoxBatch records (QR-issue + physical) excluding RECALLED
+    prisma.boxBatch.count({ where: { status: { notIn: ['RECALLED'] } } }),
+    // ACTIVE = pharmacist prepared, ready to distribute
+    prisma.boxBatch.count({ where: { status: 'ACTIVE' } }),
+    // Currently out distributions
+    prisma.distribution.count({ where: { status: 'ACTIVE' } }),
     prisma.boxBatch.count({
       where: { expiryDate: { lte: addDays(now, 7), gte: now }, status: { not: 'RECALLED' } },
     }),
