@@ -74,7 +74,7 @@ export default function BatchesPage() {
               {batches.map((b: {
                 id: string; batchNumber: string; status: string; stickerPrinted: boolean;
                 preparedDate: string; expiryDate: string;
-                box: { boxNumber: string };
+                box: { boxNumber: string } | null;
                 preparedBy: { name: string };
                 distributions: { ward: { name: string } }[];
               }) => {
@@ -85,7 +85,7 @@ export default function BatchesPage() {
                   <tr key={b.id} className={`hover:bg-gray-50 ${days < 7 && b.status !== 'RETURNED' ? 'bg-red-50' : ''}`}>
                     <td className="table-cell">
                       <p className="font-medium">{b.batchNumber}</p>
-                      <p className="text-xs text-gray-400">กล่อง {b.box.boxNumber}</p>
+                      <p className="text-xs text-gray-400">กล่อง {b.box?.boxNumber ?? '-'}</p>
                     </td>
                     <td className="table-cell text-sm">
                       {format(new Date(b.preparedDate), 'd MMM yy', { locale: th })}
