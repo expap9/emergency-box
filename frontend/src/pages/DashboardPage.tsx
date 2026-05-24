@@ -92,8 +92,9 @@ export default function DashboardPage() {
             )}
             {dashboard?.recentDistributions?.map((d: {
               id: string;
-              batch: { box: { boxNumber: string }; batchNumber: string; expiryDate: string };
-              ward: { name: string };
+              batch: { box: { boxNumber: string } | null; batchNumber: string; expiryDate: string };
+              ward?: { name: string } | null;
+              borrowerName?: string;
               distributedAt: string;
             }) => (
               <div key={d.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
@@ -102,8 +103,8 @@ export default function DashboardPage() {
                     <Package size={16} className="text-red-600" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium">{d.batch.box.boxNumber}</p>
-                    <p className="text-xs text-gray-500">{d.ward.name}</p>
+                    <p className="text-sm font-medium">{d.batch.box?.boxNumber ?? d.batch.batchNumber}</p>
+                    <p className="text-xs text-gray-500">{d.ward?.name ?? d.borrowerName ?? '—'}</p>
                   </div>
                 </div>
                 <div className="text-right">

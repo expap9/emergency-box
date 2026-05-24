@@ -89,28 +89,31 @@ export default function DistributionsPage() {
                 <tr><td colSpan={7} className="text-center py-12 text-gray-400">ไม่มีข้อมูล</td></tr>
               )}
               {distributions.map((d: {
-                id: string; status: string; condition?: string; conditionNotes?: string;
+                id: string; status: string; type?: string; condition?: string; conditionNotes?: string;
                 distributedAt: string; returnedAt?: string;
-                batch: { box: { boxNumber: string }; batchNumber: string; expiryDate: string };
-                ward: { name: string };
+                borrowerName?: string; borrowerDept?: string;
+                batch: { box: { boxNumber: string } | null; batchNumber: string; expiryDate: string };
+                ward?: { name: string } | null;
                 distributedBy: { name: string };
               }) => {
                 const days = differenceInDays(new Date(d.batch.expiryDate), new Date());
                 const isOverdue = d.status === 'ACTIVE' && days < 0;
                 const condOpt = conditionOptions.find(c => c.value === d.condition);
+                const displayName = d.batch.box?.boxNumber ?? d.batch.batchNumber;
+                const locationName = d.ward?.name ?? d.borrowerName ?? (d.type === 'LOAN' ? 'ยืม' : 'ไม่ระบุ');
                 return (
                   <tr key={d.id} className={`hover:bg-gray-50 ${isOverdue ? 'bg-red-50' : ''}`}>
                     <td className="table-cell">
                       <div className="flex items-center gap-2">
                         {isOverdue && <AlertCircle size={14} className="text-red-600 flex-shrink-0" />}
                         <div>
-                          <p className="font-medium">{d.batch.box.boxNumber}</p>
+                          <p className="font-medium">{displayName}</p>
                           <p className="text-xs text-gray-400">{d.batch.batchNumber}</p>
                         </div>
                       </div>
                     </td>
                     <td className="table-cell">
-                      <p className="font-medium">{d.ward.name}</p>
+                      <p className="font-medium">{locationName}</p>
                       <p className="text-xs text-gray-400">โดย {d.distributedBy.name}</p>
                     </td>
                     <td className="table-cell text-sm">
@@ -143,7 +146,7 @@ export default function DistributionsPage() {
                     <td className="table-cell">
                       {d.status === 'ACTIVE' && (
                         <button
-                          onClick={() => setReturnModal({ id: d.id, boxNumber: d.batch.box.boxNumber })}
+                          onClick={() => setReturnModal({ id: d.id, boxNumber: displayName })}
                           className="btn-secondary text-xs py-1.5"
                         >
                           <RotateCcw size={13} /> รับคืน
