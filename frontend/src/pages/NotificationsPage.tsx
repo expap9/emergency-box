@@ -50,7 +50,7 @@ export default function NotificationsPage() {
         <div className="space-y-3">
           {notifications.map((n: {
             id: string; type: string; message: string; sentAt: string; status: string;
-            batch: { box: { boxNumber: string }; batchNumber: string };
+            batch: { box: { boxNumber: string } | null; batchNumber: string };
             recipients: { id: string; channel: string; status: string; user: { name: string; email: string } }[];
           }) => {
             const t = typeLabel[n.type] || { label: n.type, cls: 'badge-gray' };
@@ -65,7 +65,7 @@ export default function NotificationsPage() {
                       </span>
                     </div>
                     <p className="text-sm text-gray-700">{n.message}</p>
-                    <p className="text-xs text-gray-400 mt-1">กล่อง: {n.batch.box.boxNumber} — {n.batch.batchNumber}</p>
+                    <p className="text-xs text-gray-400 mt-1">กล่อง: {n.batch.box?.boxNumber ?? n.batch.batchNumber}</p>
                   </div>
                   <div className="flex-shrink-0">
                     {n.status === 'SENT' && <CheckCircle size={18} className="text-green-500" />}
