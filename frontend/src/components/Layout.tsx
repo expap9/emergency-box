@@ -124,10 +124,6 @@ export default function Layout() {
             <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 rounded-lg hover:bg-gray-100">
               <Menu size={20} />
             </button>
-            <div className="hidden sm:flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-1.5">
-              <QrCode size={16} className="text-gray-500" />
-              <span className="text-sm text-gray-600">สแกน QR เพื่อดูข้อมูลกล่อง</span>
-            </div>
           </div>
 
           <div className="relative">
