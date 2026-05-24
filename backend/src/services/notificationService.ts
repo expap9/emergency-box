@@ -28,6 +28,11 @@ const TYPE_MAP: Record<number, string> = {
 export async function sendExpiryNotifications() {
   const now = new Date();
 
+  // Fetch recipients once — reused across all thresholds and batches
+  const notifUsers = await prisma.user.findMany({
+    where: { isActive: true, role: { in: ['ADMIN', 'PHARMACIST'] } },
+  });
+
   for (const days of ALERT_THRESHOLDS) {
     const targetDate = addDays(now, days);
     const batches = await prisma.boxBatch.findMany({
@@ -59,10 +64,6 @@ export async function sendExpiryNotifications() {
       const phoneStr = ward?.contactPhone ? `\n📞 เบอร์ติดต่อ: ${ward.contactPhone}` : '';
       const message = `⚠️ กล่องยา Emergency Box ${boxLabel} (${batch.batchNumber}) จะหมดอายุใน ${days} วัน (${expiryStr})\n📍 ปัจจุบันอยู่ที่: ${locationStr}${phoneStr}\n🔗 ดูรายละเอียด: ${detailLink}`;
 
-      const users = await prisma.user.findMany({
-        where: { isActive: true, role: { in: ['ADMIN', 'PHARMACIST'] } },
-      });
-
       const notification = await prisma.notification.create({
         data: {
           batchId: batch.id,
@@ -70,7 +71,7 @@ export async function sendExpiryNotifications() {
           message,
           status: 'PENDING',
           recipients: {
-            create: users.flatMap(u => [
+            create: notifUsers.flatMap(u => [
               { userId: u.id, channel: 'EMAIL' as const },
               ...(u.telegramId ? [{ userId: u.id, channel: 'TELEGRAM' as const }] : []),
             ]),
@@ -109,8 +110,13 @@ export async function sendExpiryNotifications() {
           });
         }
       }
-      await prisma.notification.update({ where: { id: notification.id }, data: { status: 'SENT' } });
-      logger.info(`Sent expiry notification for batch ${batch.batchNumber} (${days} days)`);
+      // Mark SENT only if all recipients succeeded, PARTIAL if some failed
+      const results = await prisma.notificationRecipient.findMany({ where: { notificationId: notification.id } });
+      const allSent = results.every(r => r.status === 'SENT');
+      const anySent = results.some(r => r.status === 'SENT');
+      const finalStatus = allSent ? 'SENT' : anySent ? 'PARTIAL' : 'FAILED';
+      await prisma.notification.update({ where: { id: notification.id }, data: { status: finalStatus } });
+      logger.info(`Notification for batch ${batch.batchNumber} (${days} days): ${finalStatus}`);
     }
   }
 

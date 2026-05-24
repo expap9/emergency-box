@@ -24,6 +24,18 @@ userRouter.post('/', requireRole('ADMIN'), async (req, res: Response) => {
   res.status(201).json(user);
 });
 
+// ⚠️ Must be defined BEFORE /:id to prevent Express capturing 'profile' as an id param
+// Update own profile (telegram id, name)
+userRouter.put('/profile/me', async (req: AuthRequest, res: Response) => {
+  const { telegramId, name } = req.body;
+  const user = await prisma.user.update({
+    where: { id: req.user!.id },
+    data: { telegramId, name },
+    select: { id: true, username: true, name: true, email: true, role: true, telegramId: true },
+  });
+  res.json(user);
+});
+
 userRouter.put('/:id', requireRole('ADMIN'), async (req, res: Response) => {
   const { name, email, role, telegramId, isActive, password } = req.body;
   const data: Record<string, unknown> = { name, email, role, telegramId, isActive };
@@ -32,17 +44,6 @@ userRouter.put('/:id', requireRole('ADMIN'), async (req, res: Response) => {
     where: { id: String(req.params.id) },
     data,
     select: { id: true, username: true, name: true, email: true, role: true, telegramId: true, isActive: true },
-  });
-  res.json(user);
-});
-
-// Update own profile (telegram id, notification preferences)
-userRouter.put('/profile/me', authenticate, async (req: AuthRequest, res: Response) => {
-  const { telegramId, name } = req.body;
-  const user = await prisma.user.update({
-    where: { id: req.user!.id },
-    data: { telegramId, name },
-    select: { id: true, username: true, name: true, email: true, role: true, telegramId: true },
   });
   res.json(user);
 });

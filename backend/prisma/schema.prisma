@@ -76,6 +76,11 @@ model BoxBatch {
   medications   BatchMedication[]
   distributions Distribution[]
   notifications Notification[]
+
+  @@index([status])
+  @@index([expiryDate])
+  @@index([status, expiryDate])
+  @@index([boxId])
 }
 
 enum BatchStatus {
@@ -163,6 +168,10 @@ model Distribution {
   scannedViaQr         Boolean          @default(false)
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
+
+  @@index([status])
+  @@index([batchId, status])
+  @@index([wardId, status])
 }
 
 enum DistributionType {
