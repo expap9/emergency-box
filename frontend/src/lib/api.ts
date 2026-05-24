@@ -39,6 +39,7 @@ export const getBoxes = () => api.get('/boxes').then(r => r.data);
 export const getBox = (id: string) => api.get(`/boxes/${id}`).then(r => r.data);
 export const createBox = (data: { boxNumber: string; notes?: string }) =>
   api.post('/boxes', data).then(r => r.data);
+export const deleteBox = (id: string) => api.delete(`/boxes/${id}`).then(r => r.data);
 export const getBoxQR = (id: string) => api.get(`/boxes/${id}/qrcode`).then(r => r.data);
 
 // Batches

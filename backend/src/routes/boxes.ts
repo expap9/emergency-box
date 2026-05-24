@@ -85,3 +85,36 @@ boxRouter.get('/:id/qrcode', async (req, res: Response) => {
   const qrCodeDataUrl = await QRCode.toDataURL(url, { width: 300, margin: 2 });
   res.json({ qrCode: box.qrCode, qrCodeDataUrl, url });
 });
+
+// Delete (retire) box
+boxRouter.delete('/:id', requireRole('ADMIN'), async (req, res: Response) => {
+  const boxId = String(req.params.id);
+
+  const box = await prisma.box.findUnique({
+    where: { id: boxId },
+    include: {
+      batches: {
+        select: { id: true, status: true },
+      },
+    },
+  });
+  if (!box) return res.status(404).json({ error: 'ไม่พบกล่อง' });
+
+  const hasActive = box.batches.some(b => b.status === 'DISTRIBUTED');
+  if (hasActive) {
+    return res.status(400).json({ error: 'ไม่สามารถลบได้ — กล่องนี้มีการจ่ายออกอยู่ กรุณารับคืนกล่องก่อน' });
+  }
+
+  if (box.batches.length === 0) {
+    // No history → hard delete
+    await prisma.box.delete({ where: { id: boxId } });
+    return res.json({ deleted: true, message: `ลบกล่อง ${box.boxNumber} เรียบร้อย` });
+  }
+
+  // Has history → soft delete (RETIRED)
+  const updated = await prisma.box.update({
+    where: { id: boxId },
+    data: { status: 'RETIRED' },
+  });
+  res.json({ deleted: false, retired: true, box: updated, message: `ปลดประจำการกล่อง ${box.boxNumber} เรียบร้อย (ประวัติยังคงอยู่)` });
+});

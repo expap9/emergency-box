@@ -3,9 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { th } from 'date-fns/locale';
-import { Package, Plus, QrCode, Printer } from 'lucide-react';
+import { Package, Plus, QrCode, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getBoxes, createBox } from '../lib/api';
+import { getBoxes, createBox, deleteBox } from '../lib/api';
+import { useAuth } from '../lib/auth';
 
 const statusLabel: Record<string, { label: string; cls: string }> = {
   AVAILABLE: { label: 'พร้อมใช้', cls: 'badge-green' },
@@ -17,9 +18,11 @@ const statusLabel: Record<string, { label: string; cls: string }> = {
 
 export default function BoxesPage() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const { data: boxes = [], isLoading } = useQuery({ queryKey: ['boxes'], queryFn: getBoxes });
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ boxNumber: '', notes: '' });
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; boxNumber: string } | null>(null);
 
   const createMut = useMutation({
     mutationFn: createBox,
@@ -30,6 +33,19 @@ export default function BoxesPage() {
       setForm({ boxNumber: '', notes: '' });
     },
     onError: () => toast.error('ไม่สามารถสร้างกล่องได้'),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => deleteBox(id),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['boxes'] });
+      toast.success(data.message);
+      setConfirmDelete(null);
+    },
+    onError: (err: { response?: { data?: { error?: string } } }) => {
+      toast.error(err.response?.data?.error ?? 'ไม่สามารถลบได้');
+      setConfirmDelete(null);
+    },
   });
 
   if (isLoading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600" /></div>;
@@ -76,11 +92,55 @@ export default function BoxesPage() {
                 <Link to={`/boxes/${box.id}/qrcode`} className="btn-secondary text-xs py-1 px-2">
                   <QrCode size={14} />
                 </Link>
+                {user?.role === 'ADMIN' && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setConfirmDelete({ id: box.id, boxNumber: box.boxNumber }); }}
+                    className="btn-secondary text-xs py-1 px-2 text-red-600 hover:bg-red-50 hover:border-red-300"
+                    title="ลบกล่อง"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* Confirm Delete Modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-sm">
+            <div className="p-6 text-center space-y-3">
+              <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+                <Trash2 size={24} className="text-red-600" />
+              </div>
+              <h2 className="text-lg font-semibold">ยืนยันการลบกล่อง?</h2>
+              <p className="text-gray-500 text-sm">
+                กล่อง <span className="font-bold text-gray-800">{confirmDelete.boxNumber}</span>
+              </p>
+              <p className="text-xs text-gray-400">
+                หากกล่องมีประวัติการจัดยา ระบบจะ "ปลดประจำการ" แทนการลบถาวร
+              </p>
+            </div>
+            <div className="flex gap-3 p-4 border-t">
+              <button
+                className="btn-secondary flex-1 justify-center"
+                onClick={() => setConfirmDelete(null)}
+              >
+                ยกเลิก
+              </button>
+              <button
+                className="btn-primary flex-1 justify-center bg-red-600 hover:bg-red-700"
+                disabled={deleteMut.isPending}
+                onClick={() => deleteMut.mutate(confirmDelete.id)}
+              >
+                {deleteMut.isPending ? 'กำลังลบ...' : 'ยืนยันลบ'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Box Modal */}
       {showModal && (
