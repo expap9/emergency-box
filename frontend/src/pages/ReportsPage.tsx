@@ -95,7 +95,7 @@ export default function ReportsPage() {
                 <tbody className="divide-y divide-gray-100">
                   {expiryData.map((b: {
                     id: string; batchNumber: string; expiryDate: string; status: string;
-                    box: { boxNumber: string };
+                    box: { boxNumber: string } | null;
                     distributions: { ward: { name: string } }[];
                   }) => {
                     const days = differenceInDays(new Date(b.expiryDate), new Date());
@@ -103,7 +103,7 @@ export default function ReportsPage() {
                     return (
                       <tr key={b.id} className={`hover:bg-gray-50 ${days <= 7 ? 'bg-red-50' : ''}`}>
                         <td className="table-cell">
-                          <p className="font-medium">{b.box.boxNumber}</p>
+                          <p className="font-medium">{b.box?.boxNumber ?? b.batchNumber}</p>
                           <p className="text-xs text-gray-400">{b.batchNumber}</p>
                         </td>
                         <td className="table-cell text-sm">{format(new Date(b.expiryDate), 'd MMM yyyy', { locale: th })}</td>
