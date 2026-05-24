@@ -36,7 +36,24 @@ app.use(helmet({
 
 app.set('trust proxy', 1); // trust nginx reverse proxy
 
-app.use(cors({ origin: process.env.FRONTEND_URL || '*', credentials: true }));
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'https://emergency-box.pages.dev',
+  'http://localhost:5173',
+  'http://localhost:4173',
+].filter(Boolean) as string[];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+      return callback(null, true);
+    }
+    callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('combined', { stream: { write: (msg) => logger.info(msg.trim()) } }));
 
